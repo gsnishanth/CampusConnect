@@ -8,7 +8,7 @@ import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ItemCard from '../../components/items/ItemCard';
-import { formatDate, getCategoryIcon } from '../../utils/helpers';
+import { formatDate, getCategoryIcon, getImageUrl } from '../../utils/helpers';
 import toast from 'react-hot-toast';
 
 export default function ItemDetail() {
@@ -17,6 +17,7 @@ export default function ItemDetail() {
   const { user } = useAuth();
 
   const [item, setItem] = useState(null);
+  const [itemError, setItemError] = useState('');
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [matchesLoading, setMatchesLoading] = useState(false);
@@ -38,9 +39,13 @@ export default function ItemDetail() {
       setLoading(true);
       try {
         const { data } = await getItemById(id);
-        const itemData = data.data || data.item || data;
+        const itemData = data.data?.item || data.item || data.data || data;
+        if (!itemData || typeof itemData !== 'object' || !itemData._id) {
+          throw new Error('The server returned an invalid item response.');
+        }
         if (isMounted) {
           setItem(itemData);
+          setItemError('');
 
           // If item has verification questions, init answers array
           if (itemData.verificationQuestions && Array.isArray(itemData.verificationQuestions)) {
@@ -50,13 +55,21 @@ export default function ItemDetail() {
           // Check if current user already submitted a claim for this item
           try {
             const claimsRes = await getMyClaims();
-            const allMyClaims = claimsRes.data.data || claimsRes.data.claims || [];
-            const found = allMyClaims.find(c => (c.itemId?._id || c.itemId) === id);
+            const allMyClaims = claimsRes.data.data?.claims || claimsRes.data.claims || [];
+            const found = Array.isArray(allMyClaims)
+              ? allMyClaims.find(c => (c.itemId?._id || c.itemId) === id)
+              : null;
             if (found && isMounted) setExistingClaim(found);
-          } catch {}
+          } catch (claimsError) {
+            console.error('Error fetching existing claims:', claimsError);
+          }
         }
       } catch (err) {
         console.error('Error fetching item:', err);
+        if (isMounted) {
+          setItem(null);
+          setItemError(err.response?.data?.message || err.message || 'Unable to load this item.');
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -75,7 +88,11 @@ export default function ItemDetail() {
       try {
         const { data } = await getItemMatches(id);
         if (isMounted) {
-          setMatches(data.data || data.matches || []);
+          const matchList = data.data?.matches || data.matches;
+          if (!Array.isArray(matchList)) {
+            throw new Error('Unexpected matches response from the server');
+          }
+          setMatches(matchList);
         }
       } catch (err) {
         console.error('Error fetching matches:', err);
@@ -99,8 +116,10 @@ export default function ItemDetail() {
     return (
       <div className="p-8 text-center max-w-lg mx-auto">
         <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-        <h2 className="text-xl font-bold text-gray-800">Item not found</h2>
-        <p className="text-sm text-gray-500 mt-1 mb-6">The item you are looking for does not exist or may have been removed.</p>
+        <h2 className="text-xl font-bold text-gray-800">{itemError ? 'Unable to load item' : 'Item not found'}</h2>
+        <p className="text-sm text-gray-500 mt-1 mb-6">
+          {itemError || 'The item you are looking for does not exist or may have been removed.'}
+        </p>
         <Link to="/browse" className="btn-primary">Back to Browse</Link>
       </div>
     );
@@ -162,7 +181,7 @@ export default function ItemDetail() {
           {/* Image */}
           <div className="bg-gray-100 flex items-center justify-center p-4">
             <img
-              src={item.image || '/placeholder.svg'}
+              src={getImageUrl(item.image)}
               alt={item.title}
               onError={e => { e.target.src = '/placeholder.svg'; }}
               className="max-h-96 w-full object-contain rounded-lg shadow-sm"

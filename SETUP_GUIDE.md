@@ -27,6 +27,8 @@ npm run dev
 ```
 > Backend starts on **http://localhost:5000**
 
+For a local MongoDB server, set `MONGO_URI=mongodb://127.0.0.1:27017/campusconnect`. For MongoDB Atlas, use your Atlas connection string and allow your machine's IP in the cluster network settings. Item photos are saved under `backend/uploads` when Cloudinary credentials are not configured.
+
 ### 3 – Frontend (new terminal)
 ```bash
 cd frontend
@@ -38,6 +40,7 @@ npm run dev
 
 ### 4 – Open the app
 Navigate to **http://localhost:5173** in your browser and register an account.
+Student registrations require a unique college email ending in `@cbit.ac.in`.
 
 ---
 
@@ -51,7 +54,7 @@ Navigate to **http://localhost:5173** in your browser and register an account.
 
 ---
 
-## 👤 Test Accounts
+## 👤 Creating an Admin Account
 
 After registering normally through the app, promote a user to **admin** using one of the methods below.
 
@@ -153,7 +156,7 @@ Leave the `CLOUDINARY_*` variables empty. The app automatically saves uploaded i
 **Symptom:** `Access-Control-Allow-Origin` error when frontend calls backend
 
 **Fix:**
-Set `FRONTEND_URL` in `backend/.env` to exactly match the origin your frontend runs on:
+Set `FRONTEND_URL` in `backend/.env` to the frontend origin and restart the backend. In development, when this is a `localhost` URL, the API also permits the equivalent `127.0.0.1` origin.
 ```
 FRONTEND_URL=http://localhost:5173
 ```

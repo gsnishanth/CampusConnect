@@ -2,6 +2,20 @@ import {
   Laptop, Wallet, BookOpen, CreditCard, Shirt, Key, Briefcase, Package,
 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+export function getImageUrl(image) {
+  if (!image) return '/placeholder.svg';
+  if (/^(https?:|data:|blob:)/i.test(image)) return image;
+
+  try {
+    const apiOrigin = new URL(API_URL, window.location.origin).origin;
+    return new URL(image, `${apiOrigin}/`).toString();
+  } catch {
+    return image;
+  }
+}
+
 export function formatDate(date) {
   if (!date) return '';
   return new Date(date).toLocaleDateString('en-US', {

@@ -7,19 +7,27 @@ const { success, error } = require('../utils/apiResponse');
  */
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, collegeId, role } = req.body;
+    const { name, email, password, collegeId } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const allowedDomain = (process.env.COLLEGE_EMAIL_DOMAIN || 'cbit.ac.in')
+      .trim()
+      .replace(/^@/, '')
+      .toLowerCase();
 
     if (!name || !email || !password) {
-      return error(res, 'Name, email and password are required', 400);
+      return error(res, 'Name, college email and password are required', 400);
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (!normalizedEmail.endsWith(`@${allowedDomain}`)) {
+      return error(res, `Use your college email ending in @${allowedDomain}`, 400);
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return error(res, 'Email already registered', 400);
+      return error(res, 'Email already registered', 409);
     }
 
-    const userRole = role === 'admin' ? 'admin' : 'student';
-    const user = await User.create({ name, email, password, collegeId, role: userRole });
+    const user = await User.create({ name, email: normalizedEmail, password, collegeId, role: 'student' });
 
     const token = user.generateToken();
 

@@ -19,7 +19,8 @@ export function AuthProvider({ children }) {
       }
       try {
         const { data } = await getMe();
-        setUser(data.data || data.user || data);
+        const responseData = data.data || data;
+        setUser(responseData.user || responseData);
         setToken(storedToken);
       } catch {
         localStorage.removeItem('token');
@@ -35,7 +36,7 @@ export function AuthProvider({ children }) {
 
   const login = async (credentials) => {
     const { data } = await loginService(credentials);
-    const { token: t, user: u } = data;
+    const { token: t, user: u } = data.data || data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
     setToken(t);
@@ -45,7 +46,7 @@ export function AuthProvider({ children }) {
 
   const register = async (formData) => {
     const { data } = await registerService(formData);
-    const { token: t, user: u } = data;
+    const { token: t, user: u } = data.data || data;
     localStorage.setItem('token', t);
     localStorage.setItem('user', JSON.stringify(u));
     setToken(t);

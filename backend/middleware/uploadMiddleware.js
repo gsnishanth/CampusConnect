@@ -8,11 +8,17 @@ const cloudinary = require('../config/cloudinary');
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  const allowedTypes = {
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+  };
+  const extension = path.extname(file.originalname).toLowerCase();
+  const mimetype = allowedTypes[extension] === file.mimetype;
 
-  if (extname && mimetype) {
+  if (mimetype) {
     return cb(null, true);
   }
   cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
@@ -30,7 +36,7 @@ const upload = multer({
  * @param {string} folder - Cloudinary folder name
  * @returns {Promise<string>} - Public URL of the uploaded file
  */
-const uploadToCloudinary = (buffer, folder = 'campusconnect') => {
+const uploadToCloudinary = (buffer, folder = 'campusconnect', mimetype) => {
   return new Promise((resolve, reject) => {
     const hasCloudinary =
       process.env.CLOUDINARY_CLOUD_NAME &&
@@ -52,7 +58,13 @@ const uploadToCloudinary = (buffer, folder = 'campusconnect') => {
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
-      const filename = `${crypto.randomUUID()}.jpg`;
+      const extension = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+      }[mimetype] || 'jpg';
+      const filename = `${crypto.randomUUID()}.${extension}`;
       const filepath = path.join(uploadsDir, filename);
       fs.writeFile(filepath, buffer, (err) => {
         if (err) return reject(err);

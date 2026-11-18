@@ -14,7 +14,7 @@ export default function NotificationItem({ notification, onClick }) {
 
   return (
     <button
-      onClick={() => onClick(notification._id)}
+      onClick={() => onClick(notification._id, notification)}
       className={`w-full text-left p-4 rounded-xl border transition-colors ${
         notification.isRead
           ? 'border-gray-100 bg-white hover:bg-gray-50'

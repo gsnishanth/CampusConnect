@@ -1,5 +1,10 @@
 const Item = require('../models/Item');
 
+const ignoredWords = new Set([
+  'a', 'an', 'and', 'at', 'found', 'i', 'in', 'item', 'it', 'lost', 'my',
+  'near', 'of', 'on', 'someone', 'the', 'their', 'this', 'to', 'was', 'with',
+]);
+
 /**
  * Normalize a string: lowercase, remove punctuation, split into words.
  * @param {string} str
@@ -10,7 +15,7 @@ const tokenize = (str = '') => {
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .split(/\s+/)
-    .filter(Boolean);
+    .filter((word) => word.length > 1 && !ignoredWords.has(word));
   return new Set(words);
 };
 
@@ -18,7 +23,7 @@ const tokenize = (str = '') => {
  * Jaccard similarity between two Sets.
  */
 const jaccardSimilarity = (setA, setB) => {
-  if (setA.size === 0 && setB.size === 0) return 1;
+  if (setA.size === 0 || setB.size === 0) return 0;
   const intersection = new Set([...setA].filter((x) => setB.has(x)));
   const union = new Set([...setA, ...setB]);
   return intersection.size / union.size;
@@ -29,11 +34,20 @@ const jaccardSimilarity = (setA, setB) => {
  */
 const dateScore = (dateA, dateB) => {
   const diffMs = Math.abs(new Date(dateA) - new Date(dateB));
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays === 0) return 20;
-  if (diffDays <= 1) return 15;
-  if (diffDays <= 3) return 10;
-  if (diffDays <= 7) return 5;
+  if (diffDays <= 1) return 16;
+  if (diffDays <= 3) return 12;
+  if (diffDays <= 7) return 6;
+  return 0;
+};
+
+const categoryScore = (categoryA, categoryB) => {
+  if (categoryA === categoryB) return 30;
+  if (
+    (categoryA === 'Wallets & Accessories' && categoryB === 'ID Cards') ||
+    (categoryA === 'ID Cards' && categoryB === 'Wallets & Accessories')
+  ) return 15;
   return 0;
 };
 
@@ -49,7 +63,12 @@ const findMatches = async (newItem, threshold = 70) => {
   const candidates = await Item.find({
     type: oppositeType,
     status: 'active',
+    userId: { $ne: newItem.userId },
     _id: { $ne: newItem._id },
+    date: {
+      $gte: new Date(new Date(newItem.date).getTime() - 30 * 24 * 60 * 60 * 1000),
+      $lte: new Date(new Date(newItem.date).getTime() + 30 * 24 * 60 * 60 * 1000),
+    },
   }).lean();
 
   const results = [];
@@ -58,11 +77,9 @@ const findMatches = async (newItem, threshold = 70) => {
     let score = 0;
 
     // Category: exact match = 30 pts
-    if (candidate.category === newItem.category) {
-      score += 30;
-    }
+    score += categoryScore(candidate.category, newItem.category);
 
-    // Location: Jaccard similarity * 25
+    // Location: keyword similarity * 25
     const locA = tokenize(newItem.location);
     const locB = tokenize(candidate.location);
     score += Math.round(jaccardSimilarity(locA, locB) * 25);
@@ -70,7 +87,7 @@ const findMatches = async (newItem, threshold = 70) => {
     // Date score (max 20)
     score += dateScore(newItem.date, candidate.date);
 
-    // Title + Description: Jaccard * 25
+    // Title + Description: Jaccard similarity * 25
     const textA = tokenize(`${newItem.title} ${newItem.description}`);
     const textB = tokenize(`${candidate.title} ${candidate.description}`);
     score += Math.round(jaccardSimilarity(textA, textB) * 25);

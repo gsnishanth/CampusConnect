@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import Badge from '../ui/Badge';
-import { formatDate } from '../../utils/helpers';
-import { Package, MapPin, Calendar, Star } from 'lucide-react';
+import { formatDate, getImageUrl } from '../../utils/helpers';
+import { MapPin, Calendar } from 'lucide-react';
 
 export default function ClaimCard({ claim, onDispute }) {
   const navigate = useNavigate();
@@ -11,7 +11,7 @@ export default function ClaimCard({ claim, onDispute }) {
     <div className="card p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start gap-4">
         <img
-          src={item?.image || '/placeholder.svg'}
+          src={getImageUrl(item?.image)}
           alt={item?.title}
           onError={e => { e.target.src = '/placeholder.svg'; }}
           className="w-16 h-16 rounded-lg object-cover bg-gray-100 flex-shrink-0"
@@ -29,14 +29,6 @@ export default function ClaimCard({ claim, onDispute }) {
               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(item.date)}</span>
             )}
           </div>
-          {claim.verificationScore !== undefined && (
-            <div className="flex items-center gap-1 mt-2">
-              <Star className="w-3.5 h-3.5 text-yellow-500" />
-              <span className="text-xs text-gray-600">
-                Match score: <strong>{claim.verificationScore}%</strong>
-              </span>
-            </div>
-          )}
           {claim.decisionNote && (
             <p className="text-xs text-gray-500 mt-1 italic">"{claim.decisionNote}"</p>
           )}

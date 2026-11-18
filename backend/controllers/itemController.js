@@ -1,5 +1,9 @@
 const Item = require('../models/Item');
+const Claim = require('../models/Claim');
 const VerificationDetail = require('../models/VerificationDetail');
+const Notification = require('../models/Notification');
+const fs = require('fs/promises');
+const path = require('path');
 const { findMatches } = require('../services/matchingService');
 const { createNotification } = require('../services/notificationService');
 const { success, error } = require('../utils/apiResponse');
@@ -80,7 +84,7 @@ const createItem = async (req, res, next) => {
 
     let imageUrl;
     if (req.file) {
-      imageUrl = await uploadToCloudinary(req.file.buffer, 'campusconnect/items');
+      imageUrl = await uploadToCloudinary(req.file.buffer, 'campusconnect/items', req.file.mimetype);
     }
 
     const item = await Item.create({
@@ -151,7 +155,16 @@ const getItemById = async (req, res, next) => {
     if (!item) {
       return error(res, 'Item not found', 404);
     }
-    return success(res, { item });
+    let verificationQuestions = [];
+    if (item.type === 'found') {
+      const verification = await VerificationDetail.findOne({ itemId: item._id }).select('additionalQuestions');
+      verificationQuestions = (verification?.additionalQuestions || []).map((question) => question.question);
+    }
+    const publicItem = item.toObject();
+    publicItem.userId = publicItem.userId
+      ? { _id: publicItem.userId._id, name: publicItem.userId.name }
+      : publicItem.userId;
+    return success(res, { item: { ...publicItem, verificationQuestions } });
   } catch (err) {
     next(err);
   }
@@ -188,7 +201,7 @@ const updateItem = async (req, res, next) => {
 
     let imageUrl = item.image;
     if (req.file) {
-      imageUrl = await uploadToCloudinary(req.file.buffer, 'campusconnect/items');
+      imageUrl = await uploadToCloudinary(req.file.buffer, 'campusconnect/items', req.file.mimetype);
     }
 
     const updatedItem = await Item.findByIdAndUpdate(
@@ -248,10 +261,25 @@ const deleteItem = async (req, res, next) => {
       return error(res, 'Not authorized to delete this item', 403);
     }
 
-    item.status = 'closed';
-    await item.save();
+    await Promise.all([
+      Claim.deleteMany({ itemId: item._id }),
+      VerificationDetail.deleteOne({ itemId: item._id }),
+      Notification.deleteMany({ relatedItemId: item._id }),
+    ]);
+    await item.deleteOne();
 
-    return success(res, null, 'Item closed successfully');
+    if (item.image?.startsWith('/uploads/')) {
+      const filename = path.basename(item.image);
+      try {
+        await fs.unlink(path.join(__dirname, '..', 'uploads', filename));
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT') {
+          console.error(`Failed to remove uploaded image ${filename}: ${cleanupError.message}`);
+        }
+      }
+    }
+
+    return success(res, null, 'Item report deleted successfully');
   } catch (err) {
     next(err);
   }

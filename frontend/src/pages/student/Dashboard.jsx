@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Package, FileText, CheckCircle, Clock, PlusCircle, ArrowRight, Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getItems, getMyReports } from '../../services/itemService';
-import { getMyClaims } from '../../services/claimService';
+import { getIncomingClaims } from '../../services/claimService';
 import { getNotifications } from '../../services/notificationService';
 import ItemCard from '../../components/items/ItemCard';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
@@ -36,8 +36,8 @@ export default function Dashboard() {
         setLoading(true);
         const [allItemsRes, myReportsRes, myClaimsRes, notifsRes] = await Promise.allSettled([
           getItems({ limit: 6, sort: '-createdAt' }),
-          getMyReports(),
-          getMyClaims(),
+          getMyReports({ limit: 100 }),
+          getIncomingClaims(),
           getNotifications(),
         ]);
 
@@ -46,10 +46,11 @@ export default function Dashboard() {
         let recent = [];
 
         if (allItemsRes.status === 'fulfilled' && allItemsRes.value.data) {
-          const itemsData = allItemsRes.value.data.data || allItemsRes.value.data.items || [];
+          const responseData = allItemsRes.value.data.data || allItemsRes.value.data;
+          const itemsData = Array.isArray(responseData.items) ? responseData.items : [];
           recent = itemsData.slice(0, 6);
           // Fetch counts if available
-          if (allItemsRes.value.data.pagination) {
+          if (responseData.pagination) {
             // approximate or fetch
           }
         }
@@ -57,23 +58,26 @@ export default function Dashboard() {
         // Count my active reports
         let activeReports = 0;
         if (myReportsRes.status === 'fulfilled' && myReportsRes.value.data) {
-          const myData = myReportsRes.value.data.data || myReportsRes.value.data.items || [];
+          const responseData = myReportsRes.value.data.data || myReportsRes.value.data;
+          const myData = Array.isArray(responseData.items) ? responseData.items : [];
           activeReports = myData.filter(i => i.status === 'active').length;
           lostCount = myData.filter(i => i.type === 'lost').length;
           foundCount = myData.filter(i => i.type === 'found').length;
         }
 
-        // Count pending claims
+        // Count incoming claims that are waiting for the finder to review.
         let pending = 0;
         if (myClaimsRes.status === 'fulfilled' && myClaimsRes.value.data) {
-          const claims = myClaimsRes.value.data.data || myClaimsRes.value.data.claims || [];
+          const responseData = myClaimsRes.value.data.data || myClaimsRes.value.data;
+          const claims = Array.isArray(responseData.claims) ? responseData.claims : [];
           pending = claims.filter(c => c.status === 'pending').length;
         }
 
         // Notifications
         let notifs = [];
         if (notifsRes.status === 'fulfilled' && notifsRes.value.data) {
-          const raw = notifsRes.value.data.data || notifsRes.value.data.notifications || [];
+          const responseData = notifsRes.value.data.data || notifsRes.value.data;
+          const raw = Array.isArray(responseData.notifications) ? responseData.notifications : [];
           notifs = raw.slice(0, 3);
         }
 
@@ -119,7 +123,10 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4 flex items-center gap-4">
+        <Link
+          to="/my-reports?type=lost"
+          className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow"
+        >
           <div className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <FileText size={24} />
           </div>
@@ -127,9 +134,12 @@ export default function Dashboard() {
             <p className="text-xs font-medium text-gray-500">My Lost Reports</p>
             <p className="text-2xl font-bold text-gray-900">{stats.totalLost}</p>
           </div>
-        </div>
+        </Link>
 
-        <div className="card p-4 flex items-center gap-4">
+        <Link
+          to="/my-reports?type=found"
+          className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow"
+        >
           <div className="w-12 h-12 bg-green-100 text-green-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <Package size={24} />
           </div>
@@ -137,9 +147,12 @@ export default function Dashboard() {
             <p className="text-xs font-medium text-gray-500">My Found Reports</p>
             <p className="text-2xl font-bold text-gray-900">{stats.totalFound}</p>
           </div>
-        </div>
+        </Link>
 
-        <div className="card p-4 flex items-center gap-4">
+        <Link
+          to="/my-reports?status=active"
+          className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow"
+        >
           <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <Clock size={24} />
           </div>
@@ -147,9 +160,12 @@ export default function Dashboard() {
             <p className="text-xs font-medium text-gray-500">Active Reports</p>
             <p className="text-2xl font-bold text-gray-900">{stats.myActiveReports}</p>
           </div>
-        </div>
+        </Link>
 
-        <div className="card p-4 flex items-center gap-4">
+        <Link
+          to="/my-claims?view=incoming&status=pending"
+          className="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow"
+        >
           <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <CheckCircle size={24} />
           </div>
@@ -157,7 +173,7 @@ export default function Dashboard() {
             <p className="text-xs font-medium text-gray-500">Pending Claims</p>
             <p className="text-2xl font-bold text-gray-900">{stats.pendingClaims}</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

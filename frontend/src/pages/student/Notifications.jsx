@@ -6,7 +6,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 export default function Notifications() {
-  const { notifications, loading, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, loading, markingAllRead, markRead, markAllRead } = useNotifications();
   const navigate = useNavigate();
 
   const handleNotificationClick = async (id, item) => {
@@ -25,12 +25,14 @@ export default function Notifications() {
             Stay updated with status changes, claim responses, and match alerts.
           </p>
         </div>
-        {notifications.length > 0 && (
+        {unreadCount > 0 && (
           <button
             onClick={markAllRead}
+            disabled={markingAllRead}
             className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5"
           >
-            <CheckCheck size={14} /> Mark all as read
+            <CheckCheck size={14} />
+            {markingAllRead ? 'Marking as read...' : 'Mark all as read'}
           </button>
         )}
       </div>

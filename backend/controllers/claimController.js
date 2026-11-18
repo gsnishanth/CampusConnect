@@ -8,7 +8,66 @@ const { success, error } = require('../utils/apiResponse');
 /**
  * Normalize a string for comparison.
  */
-const normalize = (str = '') => str.toLowerCase().trim();
+const normalize = (str = '') => str
+  .toLowerCase()
+  .trim()
+  .replace(/[^a-z0-9\s]/g, '')
+  .replace(/\s+/g, ' ');
+
+const answerMatch = (actual = '', expected = '') => {
+  const normalizedActual = normalize(actual);
+  const normalizedExpected = normalize(expected);
+  if (!normalizedActual || !normalizedExpected) return 0;
+  if (normalizedActual === normalizedExpected) return 1;
+
+  const actualWords = new Set(normalizedActual.split(' ').filter(Boolean));
+  const expectedWords = new Set(normalizedExpected.split(' ').filter(Boolean));
+  if (expectedWords.size === 0) return 0;
+  const overlap = [...expectedWords].filter((word) => actualWords.has(word)).length;
+  return overlap / expectedWords.size;
+};
+
+const calculateVerificationScore = (vd, answers = []) => {
+  if (!vd) return 0;
+  let earned = 0;
+  let weight = 0;
+
+  const fields = [
+    ['brand', 30],
+    ['identifyingMarks', 30],
+    ['hiddenDetails', 25],
+  ];
+
+  for (const [field, fieldWeight] of fields) {
+    if (vd[field]) {
+      weight += fieldWeight;
+      earned += fieldWeight * answerMatch(
+        answers.find((answer) => normalize(answer.question) === normalize(field))?.answer,
+        vd[field]
+      );
+    }
+  }
+
+  if (vd.additionalQuestions?.length) {
+    const customWeight = 15 / vd.additionalQuestions.length;
+    for (const question of vd.additionalQuestions) {
+      if (!normalize(question.answer)) continue;
+      weight += customWeight;
+      const claimantAnswer = answers.find(
+        (answer) => normalize(answer.question) === normalize(question.question)
+      );
+      earned += customWeight * answerMatch(claimantAnswer?.answer, question.answer);
+    }
+  }
+
+  return weight > 0 ? Math.round((earned / weight) * 100) : 0;
+};
+
+const withoutClaimantScore = (claim) => {
+  const sanitized = typeof claim.toObject === 'function' ? claim.toObject() : { ...claim };
+  delete sanitized.verificationScore;
+  return sanitized;
+};
 
 /**
  * @route   POST /api/claims
@@ -42,29 +101,13 @@ const createClaim = async (req, res, next) => {
       status: { $in: ['pending', 'approved'] },
     });
     if (existingClaim) {
-      return error(res, 'You already have a pending or approved claim for this item', 400);
+      return error(res, 'You already have a pending or approved claim for this item', 409);
     }
 
     // 3. Fetch verification details
     const vd = await VerificationDetail.findOne({ itemId });
 
-    // 4. Score answers
-    let verificationScore = 100; // default if no questions
-    if (vd && vd.additionalQuestions && vd.additionalQuestions.length > 0) {
-      const totalQuestions = vd.additionalQuestions.length;
-      let correctCount = 0;
-
-      for (const correctQ of vd.additionalQuestions) {
-        const userAnswer = answers.find(
-          (a) => normalize(a.question) === normalize(correctQ.question)
-        );
-        if (userAnswer && normalize(userAnswer.answer) === normalize(correctQ.answer)) {
-          correctCount++;
-        }
-      }
-
-      verificationScore = Math.round((correctCount / totalQuestions) * 100);
-    }
+    const verificationScore = calculateVerificationScore(vd, answers);
 
     // 5. Save claim (without correct answers)
     const claim = await Claim.create({
@@ -85,9 +128,7 @@ const createClaim = async (req, res, next) => {
     );
 
     // 7. Return claim without revealing correct answers
-    const claimObj = claim.toObject();
-    // answers already stored without correct answer leakage
-    return success(res, { claim: claimObj }, 'Claim submitted successfully', 201);
+    return success(res, { claim: withoutClaimantScore(claim) }, 'Claim submitted successfully', 201);
   } catch (err) {
     next(err);
   }
@@ -103,7 +144,8 @@ const getMyClaims = async (req, res, next) => {
       .populate('itemId', 'title category location type status image date')
       .sort({ createdAt: -1 });
 
-    return success(res, { claims });
+    const sanitizedClaims = claims.map(withoutClaimantScore);
+    return success(res, { claims: sanitizedClaims });
   } catch (err) {
     next(err);
   }
@@ -153,7 +195,8 @@ const getClaimById = async (req, res, next) => {
       return error(res, 'Not authorized to view this claim', 403);
     }
 
-    return success(res, { claim });
+    const responseClaim = isClaimant ? withoutClaimantScore(claim) : claim;
+    return success(res, { claim: responseClaim });
   } catch (err) {
     next(err);
   }
@@ -193,6 +236,19 @@ const makeDecision = async (req, res, next) => {
     // If approved, update item status and notify claimant
     if (status === 'approved') {
       await Item.findByIdAndUpdate(item._id, { status: 'matched' });
+      await Claim.updateMany(
+        {
+          itemId: item._id,
+          _id: { $ne: claim._id },
+          status: 'pending',
+        },
+        {
+          $set: {
+            status: 'rejected',
+            decisionNote: 'Another claim was approved for this item.',
+          },
+        }
+      );
       await createNotification(
         claim.claimantId,
         'Claim Approved!',
@@ -256,6 +312,44 @@ const disputeClaim = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   PUT /api/claims/:id/return
+ * @access  Protected (item owner)
+ */
+const markReturned = async (req, res, next) => {
+  try {
+    const claim = await Claim.findById(req.params.id).populate('itemId');
+    if (!claim) {
+      return error(res, 'Claim not found', 404);
+    }
+
+    const item = claim.itemId;
+    if (item.userId.toString() !== req.user._id.toString()) {
+      return error(res, 'Only the finder can mark the item as returned', 403);
+    }
+    if (claim.status !== 'approved') {
+      return error(res, 'The claim must be approved before marking the item as returned', 400);
+    }
+
+    await Item.findByIdAndUpdate(item._id, { status: 'returned' });
+    await Claim.updateMany(
+      { itemId: item._id },
+      { $set: { status: 'closed' } }
+    );
+    await createNotification(
+      claim.claimantId,
+      'Item Returned',
+      `The finder confirmed that "${item.title}" was returned successfully.`,
+      'return',
+      item._id
+    );
+
+    return success(res, { itemStatus: 'returned', claimStatus: 'closed' }, 'Item marked as returned');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createClaim,
   getMyClaims,
@@ -263,4 +357,5 @@ module.exports = {
   getClaimById,
   makeDecision,
   disputeClaim,
+  markReturned,
 };

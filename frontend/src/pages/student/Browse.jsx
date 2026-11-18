@@ -29,14 +29,22 @@ export default function Browse() {
       try {
         const { data } = await getItems(filters);
         if (isMounted) {
-          setItems(data.data || data.items || []);
-          if (data.pagination) {
-            setPagination(data.pagination);
+          const responseData = data.data ?? data;
+          const itemList = Array.isArray(responseData)
+            ? responseData
+            : responseData.items;
+          if (!Array.isArray(itemList)) {
+            throw new Error('Unexpected items response from the server');
+          }
+          setItems(itemList);
+          const pageData = responseData.pagination ?? data.pagination;
+          if (pageData) {
+            setPagination(pageData);
           } else {
             setPagination({
-              page: data.page || filters.page || 1,
-              pages: data.pages || Math.ceil((data.total || (data.data || []).length) / filters.limit) || 1,
-              total: data.total || (data.data || []).length,
+              page: responseData.page || filters.page || 1,
+              pages: responseData.pages || Math.ceil((responseData.total || itemList.length) / filters.limit) || 1,
+              total: responseData.total || itemList.length,
             });
           }
         }

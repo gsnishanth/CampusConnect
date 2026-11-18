@@ -1,18 +1,45 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ClipboardList, Inbox } from 'lucide-react';
-import { getMyClaims, getIncomingClaims, makeDecision, disputeClaim } from '../../services/claimService';
+import { getMyClaims, getIncomingClaims, makeDecision, disputeClaim, markReturned } from '../../services/claimService';
 import ClaimCard from '../../components/claims/ClaimCard';
 import IncomingClaimCard from '../../components/claims/IncomingClaimCard';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
+const extractClaims = (response) => {
+  const claims = response?.data?.data?.claims ?? response?.data?.claims;
+  if (!Array.isArray(claims)) {
+    throw new Error('Unexpected claims response from the server');
+  }
+  return claims;
+};
+
+const CLAIM_STATUSES = ['All', 'Pending', 'Approved', 'Rejected', 'Disputed', 'Closed'];
+
+const getRequestedView = (searchParams) =>
+  searchParams.get('view') === 'incoming' ? 'incoming' : 'outgoing';
+
+const getRequestedStatus = (searchParams) => {
+  const requestedStatus = searchParams.get('status')?.toLowerCase();
+  return CLAIM_STATUSES.find(status => status.toLowerCase() === requestedStatus) || 'All';
+};
+
 export default function MyClaims() {
-  const [view, setView] = useState('outgoing'); // 'outgoing' (claims I made) or 'incoming' (claims on my found items)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedView = searchParams.get('view');
+  const requestedStatus = searchParams.get('status');
+  const [view, setView] = useState(() => getRequestedView(searchParams));
   const [myClaims, setMyClaims] = useState([]);
   const [incomingClaims, setIncomingClaims] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState(() => getRequestedStatus(searchParams));
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setView(getRequestedView(searchParams));
+    setStatusFilter(getRequestedStatus(searchParams));
+  }, [requestedView, requestedStatus]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -22,14 +49,18 @@ export default function MyClaims() {
         getIncomingClaims(),
       ]);
 
-      if (myRes.status === 'fulfilled' && myRes.value.data) {
-        setMyClaims(myRes.value.data.data || myRes.value.data.claims || []);
+      if (myRes.status === 'fulfilled') {
+        setMyClaims(extractClaims(myRes.value));
+      } else {
+        toast.error(myRes.reason?.response?.data?.message || 'Failed to load your claims');
       }
-      if (incRes.status === 'fulfilled' && incRes.value.data) {
-        setIncomingClaims(incRes.value.data.data || incRes.value.data.claims || []);
+      if (incRes.status === 'fulfilled') {
+        setIncomingClaims(extractClaims(incRes.value));
+      } else {
+        toast.error(incRes.reason?.response?.data?.message || 'Failed to load incoming claims');
       }
     } catch (err) {
-      toast.error('Failed to load claims');
+      toast.error(err.message || 'Failed to load claims');
     } finally {
       setLoading(false);
     }
@@ -45,7 +76,7 @@ export default function MyClaims() {
       toast.success(`Claim marked as ${data.status}`);
       // Refresh incoming claims
       const res = await getIncomingClaims();
-      setIncomingClaims(res.data.data || res.data.claims || []);
+      setIncomingClaims(extractClaims(res));
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit decision');
     }
@@ -57,9 +88,20 @@ export default function MyClaims() {
       toast.success('Claim flagged for dispute review by administrators');
       // Refresh my claims
       const res = await getMyClaims();
-      setMyClaims(res.data.data || res.data.claims || []);
+      setMyClaims(extractClaims(res));
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to file dispute');
+    }
+  };
+
+  const handleReturn = async (id) => {
+    try {
+      await markReturned(id);
+      toast.success('Item marked as returned');
+      const res = await getIncomingClaims();
+      setIncomingClaims(extractClaims(res));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to mark item as returned');
     }
   };
 
@@ -67,6 +109,32 @@ export default function MyClaims() {
     if (statusFilter === 'All') return true;
     return c.status?.toLowerCase() === statusFilter.toLowerCase();
   });
+  const filteredIncomingClaims = incomingClaims.filter(c => {
+    if (statusFilter === 'All') return true;
+    return c.status?.toLowerCase() === statusFilter.toLowerCase();
+  });
+
+  const selectView = (nextView) => {
+    setView(nextView);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextView === 'incoming') {
+      nextParams.set('view', 'incoming');
+    } else {
+      nextParams.delete('view');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const selectStatus = (status) => {
+    setStatusFilter(status);
+    const nextParams = new URLSearchParams(searchParams);
+    if (status === 'All') {
+      nextParams.delete('status');
+    } else {
+      nextParams.set('status', status.toLowerCase());
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -80,7 +148,7 @@ export default function MyClaims() {
       {/* Main toggle */}
       <div className="flex border-b border-gray-200">
         <button
-          onClick={() => setView('outgoing')}
+          onClick={() => selectView('outgoing')}
           className={`pb-3 px-4 font-semibold text-sm border-b-2 transition-colors flex items-center gap-2 ${
             view === 'outgoing'
               ? 'border-blue-600 text-blue-600'
@@ -91,7 +159,7 @@ export default function MyClaims() {
           <span>My Claims ({myClaims.length})</span>
         </button>
         <button
-          onClick={() => setView('incoming')}
+          onClick={() => selectView('incoming')}
           className={`pb-3 px-4 font-semibold text-sm border-b-2 transition-colors flex items-center gap-2 ${
             view === 'incoming'
               ? 'border-blue-600 text-blue-600'
@@ -111,10 +179,10 @@ export default function MyClaims() {
         <div className="space-y-4">
           {/* Sub-status filters */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            {['All', 'Pending', 'Approved', 'Rejected', 'Disputed'].map(status => (
+            {CLAIM_STATUSES.map(status => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status)}
+                onClick={() => selectStatus(status)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   statusFilter === status
                     ? 'bg-blue-600 text-white'
@@ -149,13 +217,35 @@ export default function MyClaims() {
       ) : (
         /* Incoming claims */
         <div className="space-y-4">
-          {incomingClaims.length > 0 ? (
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {CLAIM_STATUSES.map(status => {
+              const count = status === 'All'
+                ? incomingClaims.length
+                : incomingClaims.filter(claim => claim.status?.toLowerCase() === status.toLowerCase()).length;
+              return (
+                <button
+                  key={status}
+                  onClick={() => selectStatus(status)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                    statusFilter === status
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {status} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {filteredIncomingClaims.length > 0 ? (
             <div className="space-y-4">
-              {incomingClaims.map(claim => (
+              {filteredIncomingClaims.map(claim => (
                 <IncomingClaimCard
                   key={claim._id}
                   claim={claim}
                   onDecision={handleDecision}
+                  onReturn={handleReturn}
                 />
               ))}
             </div>
@@ -163,8 +253,8 @@ export default function MyClaims() {
             <div className="card p-12">
               <EmptyState
                 icon={Inbox}
-                title="No incoming claims"
-                description="You have no pending verification requests from others."
+                title={statusFilter === 'All' ? 'No incoming claims' : `No ${statusFilter.toLowerCase()} incoming claims`}
+                description="There are no incoming claims matching this status."
               />
             </div>
           )}

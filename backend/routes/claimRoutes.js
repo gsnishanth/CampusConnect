@@ -7,6 +7,7 @@ const {
   getClaimById,
   makeDecision,
   disputeClaim,
+  markReturned,
 } = require('../controllers/claimController');
 const { protect } = require('../middleware/auth');
 
@@ -18,5 +19,6 @@ router.get('/incoming', getIncomingClaims);
 router.get('/:id', getClaimById);
 router.put('/:id/decision', makeDecision);
 router.put('/:id/dispute', disputeClaim);
+router.put('/:id/return', markReturned);
 
 module.exports = router;

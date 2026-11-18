@@ -28,17 +28,26 @@ const getDashboard = async (req, res, next) => {
     const totalItems = await Item.countDocuments();
     const totalClaims = await Claim.countDocuments();
 
+    const lostItems = await Item.countDocuments({ type: 'lost' });
+    const foundItems = await Item.countDocuments({ type: 'found' });
+    const returnedItems = await Item.countDocuments({ status: 'returned' });
+    const disputedClaims = await Claim.countDocuments({ status: 'disputed' });
+    const itemsByCategory = await Item.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+    ]);
+
     return success(res, {
-      users: { total: totalUsers, active: activeUsers },
-      items: {
-        total: totalItems,
-        byType: itemsByType,
-        byStatus: itemsByStatus,
-      },
-      claims: {
-        total: totalClaims,
-        byStatus: claimsByStatus,
-      },
+      totalUsers,
+      activeUsers,
+      lostItems,
+      foundItems,
+      returnedItems,
+      totalClaims,
+      disputedClaims,
+      itemsByType: Object.fromEntries(itemsByType.map((row) => [row._id, row.count])),
+      itemsByStatus: Object.fromEntries(itemsByStatus.map((row) => [row._id, row.count])),
+      claimsByStatus: Object.fromEntries(claimsByStatus.map((row) => [row._id, row.count])),
+      itemsByCategory: Object.fromEntries(itemsByCategory.map((row) => [row._id, row.count])),
     });
   } catch (err) {
     next(err);

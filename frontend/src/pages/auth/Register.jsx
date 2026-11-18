@@ -41,7 +41,10 @@ export default function Register() {
   const validate = () => {
     const errs = {};
     if (!form.name.trim()) errs.name = 'Full name is required';
-    if (!form.email.trim()) errs.email = 'Email is required';
+    if (!form.email.trim()) errs.email = 'College email is required';
+    else if (!/^[^\s@]+@cbit\.ac\.in$/i.test(form.email.trim())) {
+      errs.email = 'Use your college email ending in @cbit.ac.in';
+    }
     if (!form.password) errs.password = 'Password is required';
     else if (form.password.length < 6) errs.password = 'Password must be at least 6 characters';
     if (form.password !== form.confirmPassword) errs.confirmPassword = 'Passwords do not match';
@@ -60,7 +63,11 @@ export default function Register() {
       toast.success('Account created! Welcome to CampusConnect.');
       navigate('/dashboard');
     } catch (err) {
-      setErrors({ form: err.response?.data?.message || 'Registration failed. Please try again.' });
+      setErrors({
+        form: err.response?.data?.message
+          || (!err.response && 'Cannot reach the API. Check that the backend is running and MongoDB credentials are valid.')
+          || 'Registration failed. Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -93,8 +100,9 @@ export default function Register() {
             </div>
             <div>
               <label className="label">College Email</label>
-              <input type="email" className="input" placeholder="you@college.edu" value={form.email} onChange={set('email')} />
+              <input type="email" className="input" placeholder="you@cbit.ac.in" value={form.email} onChange={set('email')} />
               {errors.email && <p className="form-error">{errors.email}</p>}
+              <p className="text-xs text-gray-500 mt-1">Each student needs a unique @cbit.ac.in email address.</p>
             </div>
             <div>
               <label className="label">College ID <span className="text-gray-400 font-normal">(optional)</span></label>

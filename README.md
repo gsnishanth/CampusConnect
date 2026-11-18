@@ -12,7 +12,7 @@
 
 ## ✨ Features
 
-- **User Authentication** – Secure JWT-based register/login with role-based access (Student / Admin)
+- **User Authentication** – Secure JWT-based register/login with role-based access (Student / Admin); student registration requires a unique `@cbit.ac.in` email
 - **Report Lost & Found Items** – Submit detailed reports with images, category, location, and date
 - **Smart Matching Engine** – Automatically scores and suggests matches between lost and found items (category, location, date, keyword similarity)
 - **Claim Submission & Verification** – Students can claim items; admins verify ownership via hidden detail questions

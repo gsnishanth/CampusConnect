@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,7 +21,17 @@ export default function Login() {
     try {
       const user = await login(form);
       toast.success('Welcome back!');
-      navigate(user?.role === 'admin' ? '/admin' : '/dashboard');
+      const savedRedirect = sessionStorage.getItem('campusconnect:returnTo');
+      const requestedPath = location.state?.from
+        ? `${location.state.from.pathname}${location.state.from.search || ''}${location.state.from.hash || ''}`
+        : savedRedirect;
+      const redirectPath = requestedPath?.startsWith('/')
+        && !requestedPath.startsWith('//')
+        && !requestedPath.startsWith('/login')
+        ? requestedPath
+        : null;
+      sessionStorage.removeItem('campusconnect:returnTo');
+      navigate(redirectPath || (user?.role === 'admin' ? '/admin' : '/dashboard'), { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {

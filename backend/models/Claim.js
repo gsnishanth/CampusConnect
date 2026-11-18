@@ -24,7 +24,7 @@ const ClaimSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'disputed'],
+      enum: ['pending', 'approved', 'rejected', 'disputed', 'closed'],
       default: 'pending',
     },
     decisionNote: {
@@ -39,6 +39,9 @@ const ClaimSchema = new mongoose.Schema(
 );
 
 // Compound index to prevent duplicate claims
-ClaimSchema.index({ itemId: 1, claimantId: 1 });
+ClaimSchema.index(
+  { itemId: 1, claimantId: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ['pending', 'approved'] } } }
+);
 
 module.exports = mongoose.model('Claim', ClaimSchema);

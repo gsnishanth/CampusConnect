@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import Badge from '../ui/Badge';
 import { formatDate } from '../../utils/helpers';
-import { User, Star, CheckCircle, XCircle } from 'lucide-react';
+import { User, Star, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 
-export default function IncomingClaimCard({ claim, onDecision }) {
+export default function IncomingClaimCard({ claim, onDecision, onReturn }) {
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
@@ -96,6 +96,14 @@ export default function IncomingClaimCard({ claim, onDecision }) {
                 Cancel
               </button>
             </>
+          )}
+          {claim.status === 'approved' && onReturn && (
+            <button
+              onClick={() => onReturn(claim._id)}
+              className="btn-primary flex items-center gap-1 text-sm"
+            >
+              <RotateCcw className="w-4 h-4" /> Mark Returned
+            </button>
           )}
         </div>
       )}

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -23,8 +23,11 @@ import LoadingSpinner from './components/ui/LoadingSpinner';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  return isAuthenticated
+    ? children
+    : <Navigate to="/login" replace state={{ from: location }} />;
 }
 
 function AdminRoute({ children }) {

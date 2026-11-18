@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Edit2, Trash2, Eye } from 'lucide-react';
 import Badge from '../ui/Badge';
-import { formatDate, truncateText, getCategoryIcon } from '../../utils/helpers';
+import { formatDate, truncateText, getCategoryIcon, getImageUrl } from '../../utils/helpers';
 
 export default function ItemCard({ item, isOwner = false, onDelete }) {
   const navigate = useNavigate();
@@ -11,7 +11,7 @@ export default function ItemCard({ item, isOwner = false, onDelete }) {
     <div className="card overflow-hidden hover:shadow-md transition-shadow">
       <div className="relative">
         <img
-          src={item.image || '/placeholder.svg'}
+          src={getImageUrl(item.image)}
           alt={item.title}
           onError={e => { e.target.src = '/placeholder.svg'; }}
           className="w-full h-40 object-cover bg-gray-100"

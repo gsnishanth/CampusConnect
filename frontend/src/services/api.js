@@ -12,7 +12,7 @@ api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   if (config.data instanceof FormData) {
-    delete config.headers['Content-Type']; // Let browser set multipart boundary
+    config.headers.delete('Content-Type'); // Let the browser set the multipart boundary
   }
   return config;
 });
@@ -22,9 +22,17 @@ api.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 401) {
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+        sessionStorage.setItem(
+          'campusconnect:returnTo',
+          `${window.location.pathname}${window.location.search}${window.location.hash}`
+        );
+      }
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }
