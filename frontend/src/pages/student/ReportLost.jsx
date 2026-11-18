@@ -74,7 +74,7 @@ export default function ReportLost() {
 
       await createItem(formData);
       toast.success('Lost item report submitted successfully!');
-      navigate('/my-reports');
+      navigate('/my-reports?type=lost');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit report');
     } finally {

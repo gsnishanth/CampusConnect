@@ -106,7 +106,7 @@ export default function ReportFound() {
 
       await createItem(formData);
       toast.success('Found item reported successfully!');
-      navigate('/my-reports');
+      navigate('/my-reports?type=found');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit report');
     } finally {
