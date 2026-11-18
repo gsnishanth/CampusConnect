@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, AlertCircle } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { createItem } from '../../services/itemService';
 import toast from 'react-hot-toast';
 
@@ -26,17 +26,26 @@ export default function ReportLost() {
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size must be less than 5MB');
-        return;
-      }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+      toast.error('Choose a JPG, PNG, GIF, or WEBP image');
+      e.target.value = '';
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      e.target.value = '';
+      return;
+    }
+
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
   const removeImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImageFile(null);
     setImagePreview(null);
   };
@@ -72,9 +81,13 @@ export default function ReportLost() {
       if (form.approximateTime) formData.append('approximateTime', form.approximateTime);
       if (imageFile) formData.append('image', imageFile);
 
-      await createItem(formData);
+      const { data } = await createItem(formData);
+      const createdItem = data.data?.item || data.item;
+      if (!createdItem?._id) {
+        throw new Error('The report was submitted, but its details could not be loaded.');
+      }
       toast.success('Lost item report submitted successfully!');
-      navigate('/my-reports?type=lost');
+      navigate('/my-reports?type=lost', { state: { submittedItem: createdItem } });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit report');
     } finally {
@@ -178,6 +191,7 @@ export default function ReportLost() {
                 <img
                   src={imagePreview}
                   alt="Preview"
+                  onError={() => toast.error('Could not preview this image. Please choose another file.')}
                   className="w-40 h-40 object-cover rounded-lg border border-gray-200"
                 />
                 <button
@@ -195,7 +209,7 @@ export default function ReportLost() {
                 <span className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleImageChange}
                   className="hidden"
                 />

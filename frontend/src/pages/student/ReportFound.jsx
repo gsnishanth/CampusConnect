@@ -104,9 +104,13 @@ export default function ReportFound() {
       };
       formData.append('verificationDetails', JSON.stringify(verificationDetails));
 
-      await createItem(formData);
+      const { data } = await createItem(formData);
+      const createdItem = data.data?.item || data.item;
+      if (!createdItem?._id) {
+        throw new Error('The report was submitted, but its details could not be loaded.');
+      }
       toast.success('Found item reported successfully!');
-      navigate('/my-reports?type=found');
+      navigate('/my-reports?type=found', { state: { submittedItem: createdItem } });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit report');
     } finally {

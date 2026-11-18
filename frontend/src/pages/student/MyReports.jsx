@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { PlusCircle, Package } from 'lucide-react';
 import { getMyReports, deleteItem } from '../../services/itemService';
 import ItemCard from '../../components/items/ItemCard';
@@ -10,32 +10,48 @@ import toast from 'react-hot-toast';
 
 const TABS = ['All', 'Lost', 'Found', 'Active', 'Matched', 'Returned', 'Closed'];
 
+const getTabFromSearchParams = (searchParams) => {
+  const requestedType = searchParams.get('type')?.toLowerCase();
+  if (requestedType === 'lost' || requestedType === 'found') {
+    return requestedType[0].toUpperCase() + requestedType.slice(1);
+  }
+
+  const requestedStatus = searchParams.get('status')?.toLowerCase();
+  return TABS.find(tab => tab.toLowerCase() === requestedStatus) || 'All';
+};
+
 export default function MyReports() {
   const navigate = useNavigate();
-  const [reports, setReports] = useState([]);
-  const [activeTab, setActiveTab] = useState('All');
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const submittedItem = location.state?.submittedItem;
+  const [reports, setReports] = useState(() => submittedItem ? [submittedItem] : []);
+  const activeTab = getTabFromSearchParams(searchParams);
+  const [loading, setLoading] = useState(() => !submittedItem);
 
   // Delete modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchReports = async () => {
-    setLoading(true);
+  const fetchReports = useCallback(async () => {
     try {
-      const { data } = await getMyReports();
-      setReports(data.data || data.items || []);
+      const { data } = await getMyReports({ limit: 100 });
+      const reportsData = data.data?.items || data.items;
+      if (!Array.isArray(reportsData)) {
+        throw new Error('Unexpected reports response');
+      }
+      setReports(reportsData);
     } catch (err) {
-      toast.error('Failed to load your reports');
+      toast.error(err.response?.data?.message || err.message || 'Failed to load your reports');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [fetchReports]);
 
   const filteredReports = reports.filter(item => {
     if (activeTab === 'All') return true;
@@ -43,6 +59,21 @@ export default function MyReports() {
     if (activeTab === 'Found') return item.type === 'found';
     return item.status?.toLowerCase() === activeTab.toLowerCase();
   });
+
+  const selectTab = (tab) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (tab === 'Lost' || tab === 'Found') {
+      nextParams.set('type', tab.toLowerCase());
+      nextParams.delete('status');
+    } else if (tab !== 'All') {
+      nextParams.delete('type');
+      nextParams.set('status', tab.toLowerCase());
+    } else {
+      nextParams.delete('status');
+      nextParams.delete('type');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const confirmDelete = (id) => {
     setSelectedItemId(id);
@@ -97,7 +128,7 @@ export default function MyReports() {
           return (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => selectTab(tab)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 activeTab === tab
                   ? 'bg-blue-600 text-white'
