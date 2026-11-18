@@ -41,13 +41,16 @@ export default function MyReports() {
       if (!Array.isArray(reportsData)) {
         throw new Error('Unexpected reports response');
       }
-      setReports(reportsData);
+      const reportList = submittedItem && !reportsData.some(item => item._id === submittedItem._id)
+        ? [submittedItem, ...reportsData]
+        : reportsData;
+      setReports(reportList);
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Failed to load your reports');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [submittedItem]);
 
   useEffect(() => {
     fetchReports();
